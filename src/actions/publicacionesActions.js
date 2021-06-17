@@ -1,8 +1,11 @@
 import axios from 'axios';
 import {
-  TRAER_POR_USUARIO,
   CARGANDO,
   ERROR,
+  ACTUALIZAR,
+  COM_CARGANDO,
+  COM_ERROR,
+  COM_ACTUALIZAR,
 } from '../types/publicacionesTypes';
 import * as usuariosTypes from '../types/usuariosTypes';
 
@@ -12,7 +15,8 @@ export const traerPorUsuario = (key) => async (dispatch, getState) => {
   dispatch({
     type: CARGANDO,
   });
-  const { usuarios } = getState().usuariosReducer;
+
+  let { usuarios } = getState().usuariosReducer;
   const { publicaciones } = getState().publicacionesReducer;
   const usuario_id = usuarios[key].id;
 
@@ -20,10 +24,15 @@ export const traerPorUsuario = (key) => async (dispatch, getState) => {
     const respuesta = await axios.get(
       `https://jsonplaceholder.typicode.com/posts?userId=${usuario_id}`
     );
-    const publicaciones_actualizadas = [...publicaciones, respuesta.data];
+    const nuevas = respuesta.data.map((publicacion) => ({
+      ...publicacion,
+      comentarios: [],
+      abierto: false,
+    }));
+    const publicaciones_actualizadas = [...publicaciones, nuevas];
 
     dispatch({
-      type: TRAER_POR_USUARIO,
+      type: ACTUALIZAR,
       payload: publicaciones_actualizadas,
     });
 
@@ -42,7 +51,64 @@ export const traerPorUsuario = (key) => async (dispatch, getState) => {
     console.log(error.message);
     dispatch({
       type: ERROR,
-      payload: 'Publicaciones no disponibles',
+      payload: 'Publicaciones no disponibles.',
     });
   }
 };
+
+export const abrirCerrar = (pub_key, com_key) => (dispatch, getState) => {
+  const { publicaciones } = getState().publicacionesReducer;
+  const seleccionada = publicaciones[pub_key][com_key];
+
+  const actualizada = {
+    ...seleccionada,
+    abierto: !seleccionada.abierto,
+  };
+
+  const publicaciones_actualizadas = [...publicaciones];
+
+  publicaciones_actualizadas[pub_key] = [...publicaciones[pub_key]];
+  publicaciones_actualizadas[pub_key][com_key] = actualizada;
+
+  dispatch({
+    type: ACTUALIZAR,
+    payload: publicaciones_actualizadas,
+  });
+};
+
+export const traerComentarios =
+  (pub_key, com_key) => async (dispatch, getState) => {
+    dispatch({
+      type: COM_CARGANDO,
+    });
+
+    const { publicaciones } = getState().publicacionesReducer;
+    const seleccionada = publicaciones[pub_key][com_key];
+
+    try {
+      const respuesta = await axios.get(
+        `https://jsonplaceholder.typicode.com/comments?postId=${seleccionada.id}`
+      );
+
+      const actualizada = {
+        ...seleccionada,
+        comentarios: respuesta.data,
+      };
+
+      const publicaciones_actualizadas = [...publicaciones];
+
+      publicaciones_actualizadas[pub_key] = [...publicaciones[pub_key]];
+      publicaciones_actualizadas[pub_key][com_key] = actualizada;
+
+      dispatch({
+        type: COM_ACTUALIZAR,
+        payload: publicaciones_actualizadas,
+      });
+    } catch (error) {
+      console.log(error.message);
+      dispatch({
+        type: COM_ERROR,
+        payload: 'Comentarios no disponibles.',
+      });
+    }
+  };
